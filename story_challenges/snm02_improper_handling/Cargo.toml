@@ -1,0 +1,6 @@
+[package]
+name = "snm02_improper_handling"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]

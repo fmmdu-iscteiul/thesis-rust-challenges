@@ -1,0 +1,64 @@
+Vulnerability Explanation
+
+This challenge contains a boundary-checking bug in the guest memory access logic.
+
+The sandbox includes:
+- a guest-accessible memory region
+- host-only memory before it
+- host-only memory after it
+
+The guest should only be able to read and write inside its own region.
+
+What is vulnerable
+------------------
+The vulnerable code takes a guest-controlled offset and uses it to decide where
+to read or write.
+
+The problem is that the code does not correctly verify that the full requested
+access stays inside the guest memory region.
+
+Why that is dangerous
+---------------------
+If the access is not fully validated, the guest may reach memory outside its
+sandbox.
+
+That can lead to:
+- out-of-bounds reads
+- out-of-bounds writes
+- exposure of host data
+- corruption of host data
+- crashes or other serious security impact
+
+Why unsafe code makes this worse
+--------------------------------
+The implementation uses unsafe memory operations.
+
+Unsafe code can be valid, but only if all safety rules are enforced manually.
+Here, the critical rule is:
+
+-> Every guest memory access must remain inside the guest region
+
+Because that rule is not fully enforced, the unsafe code becomes vulnerable.
+
+Game-version note
+-----------------
+For this challenge, the vulnerable address calculation is kept visible and
+unsafe. Depending on the derived address, the starter may either reach
+host-adjacent data or crash when it dereferences memory outside the intended
+sandbox. The student fix is meant to remove that ambiguity by validating the
+full guest-memory range before any access happens.
+
+How to approach the fix
+-----------------------
+A good fix should:
+- treat the offset as untrusted
+- validate the full access range
+- prevent overflow when computing the end of the range
+- reject any access outside guest memory
+- prefer safe slice access over raw pointer operations when possible
+
+Main lesson
+-----------
+Do not validate only part of a memory access request.
+
+Validate the entire range before reading or writing.

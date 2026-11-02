@@ -1,0 +1,9 @@
+/// Snemeis Challenge 1 fixed version:
+/// Parse employee IDs from untrusted input using explicit error handling.
+
+pub fn parse_employee_id(input: &str) -> Result<u32, String> {
+    input
+        .trim()
+        .parse::<u32>()
+        .map_err(|_| format!("invalid employee ID input: {:?}", input))
+}

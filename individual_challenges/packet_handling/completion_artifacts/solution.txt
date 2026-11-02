@@ -1,0 +1,51 @@
+// File: src/auth_challenge.rs
+//
+// Fixed version:
+//   1) uses checked_add to avoid integer overflow/wraparound in the
+//      frame-size math (no narrowing to u16, no wrapping_add)
+//   2) never trusts a USERAUTH_SUCCESS message sent by a client
+
+pub const MSG_USERAUTH_REQUEST: u8 = 50;
+pub const MSG_USERAUTH_SUCCESS: u8 = 52;
+const FRAME_HEADER_SIZE: u32 = 5;
+
+#[derive(Debug, Clone)]
+pub struct Session {
+    pub authenticated: bool,
+    pub max_packet_size: u32,
+}
+
+impl Session {
+    pub fn new(max_packet_size: u32) -> Self {
+        Self {
+            authenticated: false,
+            max_packet_size,
+        }
+    }
+}
+
+pub fn process_client_packet(
+    session: &mut Session,
+    msg_type: u8,
+    payload_len: u32,
+) -> Result<(), String> {
+    let frame_size = payload_len
+        .checked_add(FRAME_HEADER_SIZE)
+        .ok_or_else(|| format!(
+            "Overflow while computing frame size: {} + {}",
+            payload_len, FRAME_HEADER_SIZE
+        ))?;
+
+    if frame_size > session.max_packet_size {
+        return Err(format!(
+            "frame size {} exceeds max {}",
+            frame_size, session.max_packet_size
+        ));
+    }
+
+    if msg_type == MSG_USERAUTH_SUCCESS {
+        return Err("Protocol violation: client cannot send USERAUTH_SUCCESS".to_string());
+    }
+
+    Ok(())
+}

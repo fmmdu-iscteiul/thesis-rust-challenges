@@ -1,0 +1,67 @@
+Vulnerability Explanation
+
+The escalation handler is vulnerable at two distinct stages.
+
+Stage 1 — Parsing (CWE-20: Improper Input Validation)
+- The parser splits the input on ';' and then calls unwrap() on split_once('=').
+  Any segment without an '=' separator causes an immediate panic.
+- Numeric fields (ticket, level) are parsed with parse().unwrap().
+  Any non-numeric value causes an immediate panic.
+- Required fields (ticket, level, team) are extracted with unwrap() on Option.
+  Any missing field causes an immediate panic.
+- Unknown fields are silently ignored, so malformed or unrecognized input can
+  slip through parsing without an explicit policy decision.
+- No input is rejected before it enters the processing stage.
+
+Stage 2 — Processing (CWE-703: Improper Check or Handling of Exceptional Conditions)
+- Downstream logic in process_escalation() assumes the parsed struct is valid.
+- If the parsing stage had not already crashed, processing would consume
+  unchecked data and potentially produce invalid output.
+- The level range check is correct, but it is the only guard — and it is
+  never reached when parsing panics first.
+
+Why this maps to CWE-20
+- The function accepts any string without verifying its structure, field
+  presence, or value types before use.
+- An attacker or a misconfigured upstream system can trigger a crash with a
+  single malformed request.
+
+Why this maps to CWE-703
+- The exceptional conditions (missing field, wrong type, bad separator) are
+  predictable and expected in real-world input.
+- None of them are handled explicitly; the code relies on panic as its only
+  response to failure, which is not a controlled error path.
+
+Why the secure Rust fix is better
+- parse_escalation returns Result<EscalationRequest, String> so every
+  fallible operation is checked and a meaningful error is returned to the caller.
+- handle_escalation propagates that Result, giving callers a stable interface
+  that never panics.
+- The parser enforces a clear field policy, so unexpected input is rejected
+  explicitly instead of being silently accepted.
+- The rest of the application can log, retry, or reject the request gracefully
+  without the service going down.
+
+Dangers and Exploitation
+- Denial of Service (DoS): any caller that can supply the escalation string
+  — an internal integration, a queue consumer, or an API endpoint — can crash
+  the escalation service with a single malformed request (for example
+  "ticket=1042;BADFORMAT;team=infra"). No authentication is needed if the
+  input path is reachable.
+- Persistent outage via message queue poisoning: if escalation strings are
+  consumed from a queue, an attacker who injects one malformed message can
+  cause the consumer to crash on every restart attempt, stalling all escalations
+  until the bad message is manually removed.
+- Escalation suppression: by crashing the handler for a specific ticket, an
+  attacker can prevent a high-priority incident from being escalated and routed
+  to the response team, delaying incident response.
+- Policy bypass via extra fields: if unexpected fields are ignored silently,
+  upstream senders can believe they are supplying meaningful routing metadata
+  while the handler drops it without notice, leading to inconsistent behavior
+  and difficult-to-debug security assumptions.
+- Cascading failures: because the handler provides no error signal before
+  crashing, upstream services that depend on a response never receive one.
+  Timeouts and retries can amplify the impact across the broader platform.
+- Information leakage: in debug builds or environments with verbose logging,
+  the panic output may expose internal field names, module paths, or data
+  values that assist an attacker in crafting further exploits.

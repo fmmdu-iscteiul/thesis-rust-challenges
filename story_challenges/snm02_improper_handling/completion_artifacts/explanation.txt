@@ -1,0 +1,36 @@
+Vulnerability Explanation
+
+The support export helper uses panic-prone handling for a required field (for example, forcing an Option to exist).
+If requester email is missing, execution panics and the export flow crashes.
+It also accepts malformed requester email values without validating that the required field is usable.
+
+Why this maps to CWE-703 (Improper Check or Handling of Exceptional Conditions)
+- Missing required data is an expected exceptional condition in real-world inputs.
+- The code does not handle that condition explicitly and safely.
+- Instead of controlled error handling, the system terminates the path through panic.
+
+Optional related mapping: CWE-248 (Uncaught Exception)
+- The panic is effectively an unhandled exceptional path that escapes normal control flow.
+
+Why the secure Rust fix is better
+- A secure implementation treats missing or invalid required data as a normal error case.
+- It returns a Result error path instead of crashing.
+- It validates that required fields are usable before exporting them.
+- This keeps the tool reliable, predictable, and safer under imperfect input data.
+
+Dangers and Exploitation
+- Denial of Service (DoS): if the export job processes records from an
+  untrusted or partially controlled source, an attacker who can insert a
+  record without the required email field will crash the entire export run,
+  preventing legitimate records from being processed.
+- Data integrity disruption: a crashed export means support data is silently
+  incomplete. Staff acting on stale exports may miss critical ticket information.
+- Targeted record suppression: an attacker with write access to the ticket
+  store could deliberately omit the email field on a specific ticket to ensure
+  that ticket is never exported and therefore never acted on (for example,
+  suppressing an incident report).
+- Bad-data propagation: if malformed requester email values are exported as if
+  they were valid, downstream tools can misroute notifications, create broken
+  audit records, or force operators to clean up corrupted output manually.
+- Pivot via log noise: repeated crashes generate alert fatigue in monitoring
+  systems, potentially masking other malicious activity happening at the same time.

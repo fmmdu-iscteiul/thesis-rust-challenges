@@ -1,0 +1,8 @@
+Snemeis Internal Support Ticket
+
+Team,
+Customer support reports the employee sign-in page intermittently crashes when users paste malformed employee IDs (letters, blanks, mixed text).
+
+Please patch the login helper so invalid input is handled safely and the service stays responsive.
+
+- IT Operations, Snemeis

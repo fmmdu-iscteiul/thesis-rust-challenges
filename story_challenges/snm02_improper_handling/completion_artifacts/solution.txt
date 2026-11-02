@@ -1,0 +1,29 @@
+/// Snemeis Challenge 2 fixed version:
+/// Handle missing or malformed requester email values through explicit Result errors.
+
+pub struct Ticket {
+    pub id: u32,
+    pub subject: String,
+    pub requester_email: Option<String>,
+}
+
+pub fn export_ticket_record(ticket: &Ticket) -> Result<String, String> {
+    let requester_email = ticket
+        .requester_email
+        .as_deref()
+        .ok_or_else(|| "missing required requester_email".to_string())?
+        .trim();
+
+    if requester_email.is_empty() {
+        return Err("missing required requester_email".to_string());
+    }
+
+    if !requester_email.contains('@') {
+        return Err("malformed requester_email".to_string());
+    }
+
+    Ok(format!(
+        "{},{},{}",
+        ticket.id, requester_email, ticket.subject
+    ))
+}

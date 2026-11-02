@@ -1,0 +1,73 @@
+// ============================================================================
+//  Suggested fix (lib.rs)
+//
+//  The vulnerable code used a guest-controlled 32-bit offset to derive a
+//  position inside the larger host memory buffer, then performed unsafe
+//  raw-pointer reads/writes while only checking `len` -- never that the FULL
+//  requested range stayed inside the guest region. That allowed out-of-bounds
+//  reads (CWE-125) and writes (CWE-787) into the protected host prefix/suffix.
+//
+//  Fix strategy:
+//    1. Treat the guest offset as untrusted; convert it to usize.
+//    2. Use checked_add to compute the end of the requested range safely.
+//    3. Reject when the length is zero / data is empty, the add overflows, or
+//       end > sandbox.guest_len().
+//    4. Use safe slice indexing on guest_slice() / guest_slice_mut() instead of
+//       raw pointer arithmetic, which removes `unsafe` from the critical path.
+//
+//  Why this works: the full memory-access range is validated before any access,
+//  preventing OOB reads/writes and eliminating the unsafe pointer path.
+// ============================================================================
+
+pub mod sandbox;
+
+pub use sandbox::{AccessError, Sandbox};
+
+pub fn read_from_guest(
+    sandbox: &Sandbox,
+    offset32: u32,
+    len: usize,
+) -> Result<Vec<u8>, AccessError> {
+    // CHANGED: reject zero-length reads before any range math.
+    if len == 0 {
+        return Err(AccessError::InvalidLength);
+    }
+
+    // CHANGED: validate the FULL [offset, offset + len) range with checked
+    // arithmetic (was: only `len` checked, then guest_base.wrapping_add).
+    let offset = offset32 as usize;
+    let end = offset.checked_add(len).ok_or(AccessError::OutOfBounds)?;
+    if end > sandbox.guest_len() {
+        return Err(AccessError::OutOfBounds);
+    }
+
+    // CHANGED: safe slice read from the guest region (was: unsafe
+    // std::slice::from_raw_parts over host_memory).
+    Ok(sandbox.guest_slice()[offset..end].to_vec())
+}
+
+pub fn write_to_guest(
+    sandbox: &mut Sandbox,
+    offset32: u32,
+    data: &[u8],
+) -> Result<(), AccessError> {
+    // CHANGED: reject empty writes before any range math.
+    if data.is_empty() {
+        return Err(AccessError::InvalidLength);
+    }
+
+    // CHANGED: validate the FULL [offset, offset + data.len()) range with
+    // checked arithmetic (was: only `data.len()` checked).
+    let offset = offset32 as usize;
+    let end = offset
+        .checked_add(data.len())
+        .ok_or(AccessError::OutOfBounds)?;
+    if end > sandbox.guest_len() {
+        return Err(AccessError::OutOfBounds);
+    }
+
+    // CHANGED: safe slice write into the guest region (was: unsafe
+    // ptr::copy_nonoverlapping into host_memory_mut).
+    sandbox.guest_slice_mut()[offset..end].copy_from_slice(data);
+    Ok(())
+}

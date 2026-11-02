@@ -1,0 +1,10 @@
+[package]
+name = "integer_overflow"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "challenge_project"
+path = "src/lib.rs"
+
+[dependencies]

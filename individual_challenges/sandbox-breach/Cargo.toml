@@ -1,0 +1,10 @@
+[package]
+name = "challenge"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "serious_game_wasmtime_sandbox"
+path = "src/lib.rs"
+
+[dependencies]

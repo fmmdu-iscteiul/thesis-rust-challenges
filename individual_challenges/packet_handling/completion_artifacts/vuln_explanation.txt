@@ -1,0 +1,41 @@
+VULNERABILITY EXPLANATION (CWE-190 challenge)
+
+File: src/auth_challenge.rs
+Function: process_client_packet
+
+1) Vulnerable arithmetic step
+
+Code:
+let frame_size = (payload_len as u16).wrapping_add(FRAME_HEADER_SIZE as u16) as u32;
+
+Why this is vulnerable:
+- payload_len is a u32, but it is cast to u16 first.
+- Large payload values lose upper bits during this cast (truncation).
+- wrapping_add then allows arithmetic wraparound in 16-bit space.
+- The result is cast back to u32, but by then the value is already corrupted.
+
+Security impact:
+- A very large attacker-controlled payload_len can become a small frame_size.
+- Size validation can be bypassed because the check compares a wrapped value.
+- This is an Integer Overflow/Wraparound weakness (CWE-190).
+
+2) Vulnerable trust boundary in auth state
+
+Code:
+if msg_type == MSG_USERAUTH_SUCCESS {
+    session.authenticated = true;
+}
+
+Why this is vulnerable:
+- A client packet is allowed to directly set authenticated=true.
+- USERAUTH_SUCCESS should represent a server-side state transition, not a client-authoritative signal.
+
+Security impact:
+- An attacker can send MSG_USERAUTH_SUCCESS and force authentication state changes.
+- In this challenge design, overflow-weakened length checks plus this state transition create an auth bypass path.
+
+3) Why this fits the challenge goal
+
+- The core technical weakness is arithmetic truncation + wraparound in packet length handling.
+- The downstream effect is broken authentication state handling.
+- This models a realistic exploit chain where low-level integer handling flaws enable high-impact security outcomes.

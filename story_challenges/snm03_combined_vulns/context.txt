@@ -1,0 +1,18 @@
+Snemeis Internal Security Ticket
+
+Team,
+
+The on-call rotation flagged repeated service crashes in the escalation handler overnight.
+Investigation shows the handler receives escalation strings from an upstream integration
+and feeds them directly into the parser without any validation.
+
+When a request arrives with a missing field or a malformed segment, the service panics
+and the entire escalation path goes down until the process is restarted.
+No error is logged — the crash is the only signal.
+
+Please fix the escalation helper so malformed or incomplete requests are rejected
+with a safe, logged error instead of crashing the service.
+Unknown or unexpected fields should also be treated as invalid input rather than
+being silently ignored.
+
+- Platform Security, Snemeis

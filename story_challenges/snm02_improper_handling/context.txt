@@ -1,0 +1,10 @@
+Snemeis Internal Support Ticket
+
+Team,
+The nightly ticket export job is failing when some imported records arrive without requester email data.
+Operations also found rows where the email field is present but malformed, and those rows are being exported as if they were valid.
+The current export process either crashes or accepts bad data instead of reporting a safe error for the bad row.
+
+Please patch the support export helper so missing required fields are handled safely and processing stays stable.
+
+- Support Platform Operations, Snemeis

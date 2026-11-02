@@ -1,0 +1,32 @@
+Vulnerability Explanation
+
+The login helper parses employee IDs from untrusted string input using panic-prone logic (for example, parse().unwrap()).
+When parsing fails, the code panics instead of returning a controlled error. That lets malformed input crash normal processing.
+
+Why this maps to CWE-20 (Improper Input Validation)
+- Employee ID input comes from an external user source.
+- The code assumes the input is valid without proper validation and safe error handling.
+- Invalid data is not handled as an expected case.
+
+Why the secure Rust fix is better
+- A secure approach treats parsing failure as normal and returns a Result-based error path.
+- This prevents crashes from malformed input and makes behavior predictable.
+- It also prevents silent fallback behavior, such as substituting `0`, that can hide validation failures.
+- It improves resilience and keeps authentication flows stable under bad input.
+
+Dangers and Exploitation
+- Denial of Service (DoS): an attacker who can influence the employee ID field
+  (for example through a crafted login form submission or a tampered API call)
+  can send a non-numeric string and crash the authentication service.
+- Repeated crashes: if the service is behind an auto-restart mechanism, an
+  attacker can send a stream of malformed IDs to keep it permanently unavailable,
+  blocking legitimate users from logging in.
+- Error oracle: depending on how the crash is surfaced, stack traces or error
+  messages may leak internal details (file paths, library versions) that help
+  an attacker plan further attacks.
+- Authentication bypass risk: in some implementations a crash in the validation
+  step might be caught by an outer handler that defaults to a permissive state,
+  accidentally granting access instead of denying it.
+- Silent fallback risk: replacing invalid IDs with a default value can turn bad
+  input into a real account identifier, causing authorization mistakes or
+  audit-trail confusion instead of a clean rejection.
